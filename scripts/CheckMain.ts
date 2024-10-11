@@ -9,9 +9,7 @@ export async function run(provider: NetworkProvider) {
 
     await main.sendDeploy(provider.sender(), toNano('0.05'));
 
-    await provider.waitForDeploy(main.address);
+    await main.sendValue(provider.sender(), toNano('0.05'), 123n);
 
-    // run methods on `main`
-
-    console.log("Initial n value: ", await main.getCurrentNValue());
+    await main.sendValue(provider.sender(), toNano('0.05'), 69n);
 }

@@ -3,36 +3,51 @@
 int load_data() inline {
     slice ds = get_data().begin_parse();
 
-    return ds~load_uint(64);
-}
-
-() save_data(int n) impure {
-    set_data(
-        begin_cell()
-            .store_uint(n, 64)
-        .end_cell()
-    );
+    return ds~load_uint(255);               ;; (NotSo)secret
 }
 
 int get_current_n_value() method_id {
-    return load_data();
+    return 42;
 }
 
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+
+    if(flags & 1) {
+        return ();
+    }
+
     if(in_msg_body.slice_empty?()) {
         return ();
     }
 
-    slice cs = in_msg_full.begin_parse();
-    int flags = cs~load_uint(4);
+    slice adress = cs~load_msg_addr();
 
-    if(flags) {
-        return ();
+    int notSoSecret = in_msg_body~load_uint(255);
+    
+    int key = load_data();
+
+    if(notSoSecret == key) {
+        var msg = begin_cell()
+            .store_uint(0, 1)       ;; tag marking type of serialization, in this context - int_msg_info (internal message info)
+            .store_uint(1, 1)       ;; Hypercube Routing disabled (something related to sharding?? - set 1 and fuck off)
+            .store_uint(1, 1)       ;; allow bounces (some sort of replies????)
+            .store_uint(0, 1)       ;; no itself bouncing
+            .store_uint(0, 2)       ;; "none" addr of source, in fact all types of addreses have 2-bit tag similer to upper, but for $00 there is no need for other part of data https://github.com/ton-blockchain/ton/blob/master/crypto/block/block.tlb
+            .store_slice(adress)      ;; destination address
+            .store_coins(0)     ;; serialization, https://docs.ton.org/learn/tvm-instructions/instructions#:~:text=FA02-,STGRAMS%20STVARUINT16,-b%20x%20%2D%20b
+            .store_uint(0, 1)       ;; disabling? dictionary for extra currencies, as i found out https://ton.org/tvm.pdf 40 page of doc - first bit marks that hash map is empty/not valid
+            .store_uint(0, 4)       ;; ihr_fee - autofill, VARUINT16(similar to coins format)
+            .store_uint(0, 4)       ;; fwd_fee - autofill, VARUINT16(similar to coins format)
+            .store_uint(0, 64)      ;; created_lt - autofill, fixed size             .store_uint(cut_lt(), 64)
+            .store_uint(0, 32)      ;; created_at - autofill, fixed size             .store_uint(now(), 32)
+            .store_uint(0, 1)       ;; init flag, for deploy functioning
+            .store_uint(0, 1)       ;; emplace message flag
+        .end_cell();
+
+        send_raw_message(msg, 128 + 32);
     }
 
-    int num = in_msg_body~load_uint(64);
-    int n = load_data();
-    n += num;
-    
-    save_data(n);
+    return();    
 }

@@ -1,11 +1,11 @@
 import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from '@ton/core';
 
 export type MainConfig = {
-    n: number
+    n: bigint
 };
 
 export function mainConfigToCell(config: MainConfig): Cell {
-    return beginCell().storeUint(config.n, 64).endCell();
+    return beginCell().storeUint(config.n, 255).endCell();
 }
 
 export class Main implements Contract {
@@ -26,6 +26,14 @@ export class Main implements Contract {
             value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginCell().endCell(),
+        });
+    }
+
+    async sendValue(provider: ContractProvider, via: Sender, value: bigint, num: bigint) {
+        await provider.internal(via, {
+            value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell().storeUint(num, 255).endCell(),
         });
     }
 

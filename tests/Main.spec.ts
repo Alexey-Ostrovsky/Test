@@ -18,7 +18,9 @@ describe('Main', () => {
     beforeEach(async () => {
         blockchain = await Blockchain.create();
 
-        main = blockchain.openContract(Main.createFromConfig({}, code));
+        main = blockchain.openContract(Main.createFromConfig({
+            n: 69n
+        }, code));
 
         deployer = await blockchain.treasury('deployer');
 
@@ -33,7 +35,16 @@ describe('Main', () => {
     });
 
     it('should deploy', async () => {
-        // the check is done inside beforeEach
-        // blockchain and main are ready to use
+        
+        var result = await main.getCurrentNValue();
+    
+        const sendResult = await main.sendValue(deployer.getSender(), toNano('0.05'), 69n);
+
+        console.log(sendResult.transactions);
+
+        const check = await main.getCurrentNValue();
+
+        console.log(check);
+
     });
 });
