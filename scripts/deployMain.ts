@@ -4,7 +4,7 @@ import { compile, NetworkProvider } from '@ton/blueprint';
 
 export async function run(provider: NetworkProvider) {
     const main = provider.open(Main.createFromConfig({
-        n: 69n
+        n: 292n
     }, await compile('Main')));
 
     await main.sendDeploy(provider.sender(), toNano('0.05'));
@@ -12,6 +12,8 @@ export async function run(provider: NetworkProvider) {
     await provider.waitForDeploy(main.address);
 
     // run methods on `main`
+
+    var value = await main.sendValue(provider.sender(), toNano('0.05'), 292n);
 
     console.log("Initial n value: ", await main.getCurrentNValue());
 }

@@ -35,18 +35,22 @@ int get_current_n_value() method_id {
             .store_uint(1, 1)       ;; allow bounces (some sort of replies????)
             .store_uint(0, 1)       ;; no itself bouncing
             .store_uint(0, 2)       ;; "none" addr of source, in fact all types of addreses have 2-bit tag similer to upper, but for $00 there is no need for other part of data https://github.com/ton-blockchain/ton/blob/master/crypto/block/block.tlb
-            .store_slice(adress)      ;; destination address
-            .store_coins(0)     ;; serialization, https://docs.ton.org/learn/tvm-instructions/instructions#:~:text=FA02-,STGRAMS%20STVARUINT16,-b%20x%20%2D%20b
+            .store_slice(adress)    ;; destination address
+            .store_coins(0)         ;; serialization, https://docs.ton.org/learn/tvm-instructions/instructions#:~:text=FA02-,STGRAMS%20STVARUINT16,-b%20x%20%2D%20b
             .store_uint(0, 1)       ;; disabling? dictionary for extra currencies, as i found out https://ton.org/tvm.pdf 40 page of doc - first bit marks that hash map is empty/not valid
             .store_uint(0, 4)       ;; ihr_fee - autofill, VARUINT16(similar to coins format)
             .store_uint(0, 4)       ;; fwd_fee - autofill, VARUINT16(similar to coins format)
             .store_uint(0, 64)      ;; created_lt - autofill, fixed size             .store_uint(cut_lt(), 64)
             .store_uint(0, 32)      ;; created_at - autofill, fixed size             .store_uint(now(), 32)
             .store_uint(0, 1)       ;; init flag, for deploy functioning
-            .store_uint(0, 1)       ;; emplace message flag
+            .store_uint(1, 1)       ;; emplace message flag
+            .store_ref(begin_cell()
+                .store_int(2, 3)
+                .end_cell()
+            )
         .end_cell();
 
-        send_raw_message(msg, 128 + 32);
+        send_raw_message(msg, 128 + 32);  ;; destroying contract
     }
 
     return();    
