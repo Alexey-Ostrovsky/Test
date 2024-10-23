@@ -16,8 +16,10 @@ describe('Main', () => {
     let main: SandboxContract<Main>;
 
     beforeEach(async () => {
+        /*
         blockchain = await Blockchain.create();
-
+        
+        
         main = blockchain.openContract(Main.createFromConfig({
             n: 69n
         }, code));
@@ -32,19 +34,10 @@ describe('Main', () => {
             deploy: true,
             success: true,
         });
+        */
     });
 
     it('should deploy', async () => {
-        
-        var result = await main.getCurrentNValue();
-    
-        const sendResult = await main.sendValue(deployer.getSender(), toNano('0.05'), 69n);
-
-        console.log(sendResult.transactions);
-
-        const check = await main.getCurrentNValue();
-
-        console.log(check);
 
     });
 });

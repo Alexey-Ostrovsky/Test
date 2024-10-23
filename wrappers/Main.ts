@@ -1,11 +1,23 @@
-import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from '@ton/core';
+import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode, storeStateInit } from '@ton/core';
+
+//run npx bluprint build (jetton-wallet.fc) at first
+import walletHex from "../build/JettonWallet.compiled.json";
+
+const JETTON_WALLET_CODE = Cell.fromBoc(Buffer.from(walletHex.hex, 'hex'))[0];
+const JETTON_MASTER_ADDRESS = Address.parse('EQCpj4ZJAkcNDfQZ0Cs9hlYhD9Te9H7M_TY7pxPcRVvtDuNo');
 
 export type MainConfig = {
-    n: bigint
+    ownerAddress: Address;
+    commission : number;
 };
 
 export function mainConfigToCell(config: MainConfig): Cell {
-    return beginCell().storeUint(config.n, 255).endCell();
+    return  beginCell()
+                .storeAddress(JETTON_MASTER_ADDRESS)
+                .storeRef(JETTON_WALLET_CODE)
+                .storeAddress(config.ownerAddress)
+                .storeUint(config.commission, 8)
+            .endCell();
 }
 
 export class Main implements Contract {
@@ -27,18 +39,5 @@ export class Main implements Contract {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginCell().endCell(),
         });
-    }
-
-    async sendValue(provider: ContractProvider, via: Sender, value: bigint, num: bigint) {
-        await provider.internal(via, {
-            value,
-            sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: beginCell().storeUint(num, 255).endCell(),
-        });
-    }
-
-    async getCurrentNValue(provider: ContractProvider) : Promise<number> {
-        const result = await provider.get('get_current_n_value', []);
-        return result.stack.readNumber();
     }
 }
