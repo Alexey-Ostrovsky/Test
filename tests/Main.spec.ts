@@ -1,19 +1,33 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
 import { Cell, toNano } from '@ton/core';
 import { Main } from '../wrappers/Main';
+import {JettonWallet} from '../wrappers/JettonWallet';
+import {JettonMinter} from '../wrappers/JettonMinter';
+
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
 
+
 describe('Main', () => {
-    let code: Cell;
+    let mainCode: Cell;
+    let minterCode: Cell;
+    let walletCode: Cell;
 
     beforeAll(async () => {
-        code = await compile('Main');
+        mainCode = await compile('Main');
+        minterCode = await compile('JettonMinter');
+        walletCode = await compile('JettonWallet');
     });
 
     let blockchain: Blockchain;
     let deployer: SandboxContract<TreasuryContract>;
+
     let main: SandboxContract<Main>;
+    let mainJettonWallet: SandboxContract<JettonWallet>;
+    let JettonMinter: SandboxContract<JettonMinter>;
+    
+    let SenderJettonWallet: SandboxContract<JettonWallet>;
+
 
     beforeEach(async () => {
         blockchain = await Blockchain.create();
@@ -24,10 +38,17 @@ describe('Main', () => {
             ownerAddress: deployer.address,
             commission: 1,
             commissionAddress: deployer.address
-        }, code));
+        }, mainCode));
 
         const deployResult = await main.sendDeploy(deployer.getSender(), toNano('2.00'));
 
+        //minter??
+
+        //jettonWallet - direct owning by deployer      
+        //jettonWallet - owning by main contract             x
+        //create another deployer - change admin
+        //commision address - create another deployer + jettonWallet on that address
+        //withdraw address - same as commission
 
         console.log(deployResult.transactions);
 

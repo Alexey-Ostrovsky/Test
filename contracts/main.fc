@@ -86,7 +86,7 @@
 
         ;;calculating commission amount
         int jetton_recieved = in_msg_body~load_coins();
-        in_msg_body~load_msg_addr();                                ;; skip original source of jettons
+        slice origin_addr = in_msg_body~load_msg_addr();                                ;; skip original source of jettons
         slice either_forward_payload = in_msg_body;
         int commission = (jetton_recieved / 100) * commission_percent;
 
@@ -103,6 +103,7 @@
             .store_uint(query_id, 64)
             .store_coins(commission)
             .store_slice(commission_addr)
+            .store_slice(origin_addr)
             .store_dict(new_dict())
             .store_coins(0)
             .store_slice(either_forward_payload)
