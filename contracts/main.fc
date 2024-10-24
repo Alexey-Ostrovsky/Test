@@ -90,6 +90,8 @@
         slice either_forward_payload = in_msg_body;
         int commission = (jetton_recieved / 100) * commission_percent;
 
+        slice commission_jetton_addr = calculate_user_jetton_wallet_address(commission_addr, master_addr, wallet_code);
+
         var msg = begin_cell()
             .store_uint(0x18, 6)
             .store_slice(jetton_address)
@@ -123,6 +125,7 @@
             return();                                               ;; consider sending back ton amount
         }
 
+        ;;withdraw
         if(op == op::withdraw()) {
             int withdraw_jetton_amount = in_msg_body~load_coins();
             slice reciever_addr = in_msg_body~load_msg_addr();

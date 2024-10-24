@@ -8,6 +8,7 @@ const JETTON_MASTER_ADDRESS = Address.parse('EQCpj4ZJAkcNDfQZ0Cs9hlYhD9Te9H7M_TY
 export type MainConfig = {
     ownerAddress: Address;
     commission : number;
+    commissionAddress: Address;
 };
 
 export function mainConfigToCell(config: MainConfig): Cell {
@@ -16,6 +17,7 @@ export function mainConfigToCell(config: MainConfig): Cell {
                 .storeRef(JETTON_WALLET_CODE)
                 .storeAddress(config.ownerAddress)
                 .storeUint(config.commission, 8)
+                .storeAddress(config.commissionAddress)
             .endCell();
 }
 
@@ -67,7 +69,7 @@ export class Main implements Contract {
     }
 
     async getCurrentState(provider: ContractProvider) : Promise<[Address, number, Address]> {
-        const result = await provider.get('get_current_n_value', []);
+        const result = await provider.get('get_current_state', []);
 
         let admin_addr: Address = result.stack.readAddress();
         let commission_prescent: number = result.stack.readNumber();
