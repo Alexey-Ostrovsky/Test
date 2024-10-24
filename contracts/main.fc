@@ -1,4 +1,3 @@
-
 #include "imports/stdlib.fc";
 #include "imports/params.fc";
 #include "imports/constants.fc";
@@ -6,15 +5,16 @@
 #include "imports/op-codes.fc";
 #include "imports/utils.fc";
 
-;; data sctructure:
+;;      data sctructure:
 
-;;  jetton minter address
-;;  jetton wallet code
+;;      jetton minter address
+;;      jetton wallet code
 
-;;  admin address
-;;  commission_percent
-;;  commission address
+;;      admin address
+;;      commission_percent
+;;      commission address
 
+;;      admin operations
 
 (slice, cell, slice, int, slice) load_data() inline {
     slice ds = get_data().begin_parse();
@@ -69,25 +69,26 @@
     slice sender_addr = cs~load_msg_addr();
 
     ;;get persistent data
-    (slice master_addr, 
-    cell wallet_code, 
-    slice admin_addr, 
-    int commission_percent, 
+    (slice master_addr,
+    cell wallet_code,
+    slice admin_addr,
+    int commission_percent,
     slice commission_addr) = load_data();
 
     slice jetton_address = calculate_user_jetton_wallet_address(my_address(), master_addr, wallet_code);
 
+    ;; in case we recieved notification from controlled jetton wallet
     if(equal_slices(sender_addr, jetton_address)) {
         int op = in_msg_body~load_uint(32);
         int query_id = in_msg_body~load_uint(64);
-        ;; checking for correct opcode
-        if(op != op::transfer_notification()) {
-            return(); ;;??
-        }
+
+        throw_unless(709, (op == op::transfer_notification()));     ;;i have no idea why 709
 
         ;;calculating commission amount
         int jetton_recieved = in_msg_body~load_coins();
-        int commission = jetton_recieved / 100 * commission_percent;
+        in_msg_body~load_msg_addr();                                ;; skip original source of jettons
+        slice either_forward_payload = in_msg_body;
+        int commission = (jetton_recieved / 100) * commission_percent;
 
         var msg = begin_cell()
             .store_uint(0x18, 6)
@@ -102,46 +103,85 @@
             .store_slice(commission_addr)
             .store_dict(new_dict())
             .store_coins(0)
-            
+            .store_slice(either_forward_payload)
         .end_cell();
 
         msg = msg.store_ref(msg_body);
-        send_raw_message(msg.end_cell(), 64); ;; consider possible change of mod
-        
-
-
+        send_raw_message(msg.end_cell(), 64);                       ;; consider possible change of mod on 1
+        return();
     }
 
+    ;;admin manipulations
+    if(equal_slices(admin_addr, sender_addr)) {
+        int op = in_msg_body~load_uint(32);
+        int query_id = in_msg_body~load_uint(64);
 
-    {-
-    int notSoSecret = in_msg_body~load_uint(255);
-    
-    int key = load_data();
+        ;;change_admin
+        if(op == op::transfer_ownership()) {
+            slice new_admin = in_msg_body~load_msg_addr();
+            save_data(new_admin, commission_percent, commission_addr); 
+            return();                                               ;; consider sending back ton amount
+        }
 
-    if(notSoSecret == key) {
-        var msg = begin_cell()
-            .store_uint(0, 1)       ;; tag marking type of serialization, in this context - int_msg_info (internal message info)
-            .store_uint(1, 1)       ;; Hypercube Routing disabled (something related to sharding?? - set 1 and fuck off)
-            .store_uint(1, 1)       ;; allow bounces (some sort of replies????)
-            .store_uint(0, 1)       ;; no itself bouncing
-            .store_uint(0, 2)       ;; "none" addr of source, in fact all types of addreses have 2-bit tag similer to upper, but for $00 there is no need for other part of data https://github.com/ton-blockchain/ton/blob/master/crypto/block/block.tlb
-            .store_slice(address)    ;; destination address
-            .store_coins(0)         ;; serialization, https://docs.ton.org/learn/tvm-instructions/instructions#:~:text=FA02-,STGRAMS%20STVARUINT16,-b%20x%20%2D%20b
-            .store_uint(0, 1)       ;; disabling? dictionary for extra currencies, as i found out https://ton.org/tvm.pdf 40 page of doc - first bit marks that hash map is empty/not valid
-            .store_uint(0, 4)       ;; ihr_fee - autofill, VARUINT16(similar to coins format)
-            .store_uint(0, 4)       ;; fwd_fee - autofill, VARUINT16(similar to coins format)
-            .store_uint(0, 64)      ;; created_lt - autofill, fixed size             .store_uint(cut_lt(), 64)
-            .store_uint(0, 32)      ;; created_at - autofill, fixed size             .store_uint(now(), 32)
-            .store_uint(0, 1)       ;; init flag, for deploy functioning
-            .store_uint(1, 1)       ;; emplace message flag
-            .store_ref(begin_cell()
-                .store_int(2, 3)
-                .end_cell()
-            )
-        .end_cell();
+        if(op == op::withdraw()) {
+            int withdraw_jetton_amount = in_msg_body~load_coins();
+            slice reciever_addr = in_msg_body~load_msg_addr();
+            slice either_forward_payload = in_msg_body;
 
-        send_raw_message(msg, 128 + 32);  ;; destroying contract
+            var msg = begin_cell()
+                .store_uint(0x18, 6)
+                .store_slice(jetton_address)
+                .store_coins(0)
+                .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1);
+
+            var msg_body = begin_cell()
+                .store_uint(op::transfer(), 32)
+                .store_uint(query_id, 64)
+                .store_coins(withdraw_jetton_amount)
+                .store_slice(reciever_addr)
+                .store_dict(new_dict())
+                .store_coins(0)
+                .store_slice(either_forward_payload)
+            .end_cell();
+
+            msg = msg.store_ref(msg_body);
+            send_raw_message(msg.end_cell(), 64);                       ;; consider possible change of mod on 1
+            return();
+        }
+
+        throw(709);
     }
-    -}
-    return();    
+
+    throw(0xffff);
 }
+
+{-
+int notSoSecret = in_msg_body~load_uint(255);
+
+int key = load_data();
+
+if(notSoSecret == key) {
+    var msg = begin_cell()
+        .store_uint(0, 1)       ;; tag marking type of serialization, in this context - int_msg_info (internal message info)
+        .store_uint(1, 1)       ;; Hypercube Routing disabled (something related to sharding?? - set 1 and fuck off)
+        .store_uint(1, 1)       ;; allow bounces (some sort of replies????)
+        .store_uint(0, 1)       ;; no itself bouncing
+        .store_uint(0, 2)       ;; "none" addr of source, in fact all types of addreses have 2-bit tag similer to upper, but for $00 there is no need for other part of data https://github.com/ton-blockchain/ton/blob/master/crypto/block/block.tlb
+        .store_slice(address)    ;; destination address
+        .store_coins(0)         ;; serialization, https://docs.ton.org/learn/tvm-instructions/instructions#:~:text=FA02-,STGRAMS%20STVARUINT16,-b%20x%20%2D%20b
+        .store_uint(0, 1)       ;; disabling? dictionary for extra currencies, as i found out https://ton.org/tvm.pdf 40 page of doc - first bit marks that hash map is empty/not valid
+        .store_uint(0, 4)       ;; ihr_fee - autofill, VARUINT16(similar to coins format)
+        .store_uint(0, 4)       ;; fwd_fee - autofill, VARUINT16(similar to coins format)
+        .store_uint(0, 64)      ;; created_lt - autofill, fixed size             .store_uint(cut_lt(), 64)
+        .store_uint(0, 32)      ;; created_at - autofill, fixed size             .store_uint(now(), 32)
+        .store_uint(0, 1)       ;; init flag, for deploy functioning
+        .store_uint(1, 1)       ;; emplace message flag
+        .store_ref(begin_cell()
+            .store_int(2, 3)
+            .end_cell()
+        )
+    .end_cell();
+
+    send_raw_message(msg, 128 + 32);  ;; destroying contract
+}
+-}
