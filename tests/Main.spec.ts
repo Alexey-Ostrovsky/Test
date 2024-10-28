@@ -1,12 +1,16 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
-import { Cell, toNano } from '@ton/core';
+import { Cell, toNano, Address, beginCell} from '@ton/core';
 import { Main } from '../wrappers/Main';
+import '@ton/test-utils'
 import {JettonWallet} from '../wrappers/JettonWallet';
 import {JettonMinter} from '../wrappers/JettonMinter';
 
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
+import { checkPrime } from 'crypto';
 
+const totalAmount = 1000000000000n;
+const defaultCommision = 1;
 
 describe('Main', () => {
     let mainCode: Cell;
@@ -14,61 +18,130 @@ describe('Main', () => {
     let walletCode: Cell;
 
     beforeAll(async () => {
-        mainCode = await compile('Main');
         minterCode = await compile('JettonMinter');
         walletCode = await compile('JettonWallet');
+        mainCode = await compile('Main');
     });
 
     let blockchain: Blockchain;
-    let deployer: SandboxContract<TreasuryContract>;
+    let deployerMinter: SandboxContract<TreasuryContract>;
+    let deployerMain: SandboxContract<TreasuryContract>;
+    let CommissionContract: SandboxContract<TreasuryContract>;
 
     let main: SandboxContract<Main>;
+
+    let jettonMinter: SandboxContract<JettonMinter>;
+
     let mainJettonWallet: SandboxContract<JettonWallet>;
-    let JettonMinter: SandboxContract<JettonMinter>;
-    
-    let SenderJettonWallet: SandboxContract<JettonWallet>;
+    let minterJettonWallet: SandboxContract<JettonWallet>;
+    let commissionJettonWallet: SandboxContract<JettonWallet>;
 
 
     beforeEach(async () => {
         blockchain = await Blockchain.create();
 
-        deployer = await blockchain.treasury('deployer');
-        
+        //Minter infrastructure
+        deployerMinter = await blockchain.treasury('deployer');
+
+        jettonMinter = blockchain.openContract(
+            JettonMinter.createFromConfig({
+                    jettonWalletCode: minterCode,
+                    adminAddress: deployerMinter.address,
+                    content: beginCell().storeStringTail('firstminter').endCell(),
+                },
+                minterCode
+            )
+        );
+
+        //деплоим минтер
+        await jettonMinter.sendDeploy(deployerMinter.getSender(), toNano(100));
+
+        //деплоим кошелек на адрес админа минтера
+        await jettonMinter.sendMint(deployerMinter.getSender(), {
+            jettonAmount: totalAmount,
+            queryId: 9,
+            toAddress: deployerMinter.address,
+            amount: toNano(1),
+            value: toNano(2),
+        });
+
+        //получаем его instance из адреса
+        minterJettonWallet = blockchain.openContract(
+            JettonWallet.createFromAddress(
+                await jettonMinter.getWalletAddress(deployerMinter.address)
+            )
+        );
+
+
+        //деплоим контракт для отсылки комиссии
+        CommissionContract = await blockchain.treasury('deployer');
+
+        //деплоим джеттон-кошелек для коммиссии
+        await jettonMinter.sendMint(deployerMinter.getSender(), {
+            jettonAmount: 1000n,
+            queryId: 11,
+            toAddress: CommissionContract.address,
+            amount: toNano(1),
+            value: toNano(2),
+        });
+
+        //получаем его инстанс из адреса
+        commissionJettonWallet = blockchain.openContract(
+            JettonWallet.createFromAddress(
+                await jettonMinter.getWalletAddress(CommissionContract.address)
+            )
+        );
+
+
+        //Main infrastructure
+        deployerMain = await blockchain.treasury('deployer');
+
         main = blockchain.openContract(Main.createFromConfig({
-            ownerAddress: deployer.address,
-            commission: 1,
-            commissionAddress: deployer.address
+            ownerAddress: deployerMain.address,
+            commission: defaultCommision,
+            commissionAddress: CommissionContract.address
         }, mainCode));
 
-        const deployResult = await main.sendDeploy(deployer.getSender(), toNano('2.00'));
+        //деплоим мейн
+        await main.sendDeploy(deployerMain.getSender(), toNano(100));
 
-        //minter??
-
-        //jettonWallet - direct owning by deployer      
-        //jettonWallet - owning by main contract             x
-        //create another deployer - change admin
-        //commision address - create another deployer + jettonWallet on that address
-        //withdraw address - same as commission
-
-        console.log(deployResult.transactions);
-
-        expect(deployResult.transactions).toHaveTransaction({
-            from: deployer.address,
-            to: main.address,
-            deploy: true,
-            success: true,
+        //деплоим джеттон кошелек для main контракта
+        await jettonMinter.sendMint(deployerMinter.getSender(), {
+            jettonAmount: 1000n,
+            queryId: 10,
+            toAddress: main.address,
+            amount: toNano(1),
+            value: toNano(2),
         });
+
+        //получаем его инстанс из адреса
+        mainJettonWallet = blockchain.openContract(
+            JettonWallet.createFromAddress(
+                await jettonMinter.getWalletAddress(main.address)
+            )
+        );
     });
 
-    it('should deploy', async () => {
+    it('check initial state', async() => {
         let result = await main.getCurrentState();
+        expect(deployerMain.address.toString()).toEqual(result[0].toString());
+        expect(defaultCommision).toEqual(result[1]);
+        expect(CommissionContract.address.toString()).toEqual(result[2].toString());
+    })
 
-        console.log(result[0]);
-        console.log(result[1]);
-        console.log(result[2]);
+    it('test change admin', async () => {
+        let InitialState = await main.getCurrentState();
 
-        let yet_another_result = await main.sendChangeAdmin(deployer.getSender(), toNano(0.05), 100, deployer.address);
+        let testChangeAdmin: SandboxContract<TreasuryContract>;
+        testChangeAdmin = await blockchain.treasury('testChangeAdmin');
 
-        console.log(yet_another_result.transactions);
+        await main.sendChangeAdmin(deployerMain.getSender(), toNano(0.05), 100, testChangeAdmin.address);
+
+        let MutatedState = await main.getCurrentState();
+
+        expect(MutatedState[0].toString()).toEqual(testChangeAdmin.address.toString());
+        expect(MutatedState[1]).toEqual(InitialState[1]);
+        expect(MutatedState[2].toString()).toEqual(InitialState[2].toString());
     });
+
 });
