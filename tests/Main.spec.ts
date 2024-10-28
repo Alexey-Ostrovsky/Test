@@ -45,7 +45,7 @@ describe('Main', () => {
 
         jettonMinter = blockchain.openContract(
             JettonMinter.createFromConfig({
-                    jettonWalletCode: minterCode,
+                    jettonWalletCode: walletCode,
                     adminAddress: deployerMinter.address,
                     content: beginCell().storeStringTail('firstminter').endCell(),
                 },
@@ -97,6 +97,8 @@ describe('Main', () => {
         deployerMain = await blockchain.treasury('deployerMain');
 
         main = blockchain.openContract(Main.createFromConfig({
+            masterAddr: jettonMinter.address,
+            walletCode: walletCode,
             ownerAddress: deployerMain.address,
             commission: defaultCommision,
             commissionAddress: CommissionContract.address
@@ -145,13 +147,39 @@ describe('Main', () => {
     });
 
     it('commission test', async() => {
-        const jettonTranferAmount = 100n;
+        const jettonTranferAmount = 500n;
 
-        let total = await jettonMinter.getTotalSupply();
+        console.log(await commissionJettonWallet.getWalletJettonAmount());
+        console.log(await mainJettonWallet.getWalletJettonAmount());
+        console.log(await minterJettonWallet.getWalletJettonAmount());
 
-        let amount = await commissionJettonWallet.getWalletJettonAmount();
+        let result = await minterJettonWallet.sendTransfer(deployerMinter.getSender(), {
+            jettonAmount: jettonTranferAmount,
+            queryId: 12,
+            toAddress: main.address,
+            fwdAmount: toNano(1),
+            value: toNano(2),
+        });
 
-        console.log(total)
-        console.log(amount);
-    })
+        console.log("commision jetton wallet: " + commissionJettonWallet.address.toString());
+        console.log("main jetton wallet: " + mainJettonWallet.address.toString());
+        console.log("main: " + main.address.toString());
+
+        expect(result.transactions).toHaveTransaction({
+            from: main.address,
+            to: mainJettonWallet.address,
+            success: true,
+        });
+
+        expect(result.transactions).toHaveTransaction({
+            from: mainJettonWallet.address,
+            to: commissionJettonWallet.address,
+            success: true,
+        });
+
+        console.log(await commissionJettonWallet.getWalletJettonAmount());
+        console.log(await mainJettonWallet.getWalletJettonAmount());
+        console.log(await minterJettonWallet.getWalletJettonAmount());
+    });
+
 });

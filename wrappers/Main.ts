@@ -2,10 +2,12 @@ import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, 
 
 import walletHex from "../build/JettonWallet.compiled.json";
 
-const JETTON_WALLET_CODE = Cell.fromBoc(Buffer.from(walletHex.hex, 'hex'))[0];
-const JETTON_MASTER_ADDRESS = Address.parse('EQCpj4ZJAkcNDfQZ0Cs9hlYhD9Te9H7M_TY7pxPcRVvtDuNo');
+//const JETTON_WALLET_CODE = Cell.fromBoc(Buffer.from(walletHex.hex, 'hex'))[0];
+//const JETTON_MASTER_ADDRESS = Address.parse('EQCpj4ZJAkcNDfQZ0Cs9hlYhD9Te9H7M_TY7pxPcRVvtDuNo');
 
 export type MainConfig = {
+    masterAddr: Address;
+    walletCode: Cell;
     ownerAddress: Address;
     commission : number;
     commissionAddress: Address;
@@ -13,8 +15,8 @@ export type MainConfig = {
 
 export function mainConfigToCell(config: MainConfig): Cell {
     return  beginCell()
-                .storeAddress(JETTON_MASTER_ADDRESS)
-                .storeRef(JETTON_WALLET_CODE)
+                .storeAddress(config.masterAddr)
+                .storeRef(config.walletCode)
                 .storeAddress(config.ownerAddress)
                 .storeUint(config.commission, 8)
                 .storeAddress(config.commissionAddress)
