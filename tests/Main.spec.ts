@@ -41,7 +41,7 @@ describe('Main', () => {
         blockchain = await Blockchain.create();
 
         //Minter infrastructure
-        deployerMinter = await blockchain.treasury('deployer');
+        deployerMinter = await blockchain.treasury('deployerMinter');
 
         jettonMinter = blockchain.openContract(
             JettonMinter.createFromConfig({
@@ -74,7 +74,7 @@ describe('Main', () => {
 
 
         //деплоим контракт для отсылки комиссии
-        CommissionContract = await blockchain.treasury('deployer');
+        CommissionContract = await blockchain.treasury('deployerCommision');
 
         //деплоим джеттон-кошелек для коммиссии
         await jettonMinter.sendMint(deployerMinter.getSender(), {
@@ -94,7 +94,7 @@ describe('Main', () => {
 
 
         //Main infrastructure
-        deployerMain = await blockchain.treasury('deployer');
+        deployerMain = await blockchain.treasury('deployerMain');
 
         main = blockchain.openContract(Main.createFromConfig({
             ownerAddress: deployerMain.address,
@@ -144,4 +144,14 @@ describe('Main', () => {
         expect(MutatedState[2].toString()).toEqual(InitialState[2].toString());
     });
 
+    it('commission test', async() => {
+        const jettonTranferAmount = 100n;
+
+        let total = await jettonMinter.getTotalSupply();
+
+        let amount = await commissionJettonWallet.getWalletJettonAmount();
+
+        console.log(total)
+        console.log(amount);
+    })
 });
