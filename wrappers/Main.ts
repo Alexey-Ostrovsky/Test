@@ -1,22 +1,28 @@
 import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode, Slice, storeStateInit } from '@ton/core';
-
-import walletHex from "../build/JettonWallet.compiled.json";
-
-//const JETTON_WALLET_CODE = Cell.fromBoc(Buffer.from(walletHex.hex, 'hex'))[0];
-//const JETTON_MASTER_ADDRESS = Address.parse('EQCpj4ZJAkcNDfQZ0Cs9hlYhD9Te9H7M_TY7pxPcRVvtDuNo');
+import { KeyPair, sign } from '@ton/crypto';
 
 export type MainConfig = {
     masterAddr: Address;
     walletCode: Cell;
+    publicKey: Buffer;
+
+    seqno: 0;
     ownerAddress: Address;
     commission : number;
     commissionAddress: Address;
 };
 
 export function mainConfigToCell(config: MainConfig): Cell {
+    var immutable = beginCell()
+        .storeAddress(config.masterAddr)
+        .storeRef(config.walletCode)
+        .storeBuffer(config.publicKey)
+    .endCell();
+
     return  beginCell()
-                .storeAddress(config.masterAddr)
-                .storeRef(config.walletCode)
+                .storeRef(immutable)
+
+                .storeUint(config.seqno, 32)
                 .storeAddress(config.ownerAddress)
                 .storeUint(config.commission, 8)
                 .storeAddress(config.commissionAddress)
@@ -70,12 +76,36 @@ export class Main implements Contract {
         });
     }
 
+    async sendExtMessage(provider: ContractProvider, opCode: number, seqno: number, keys: KeyPair) {
+        const msg = beginCell()
+            .storeUint(seqno, 32)
+            .storeUint(opCode, 32)
+        .endCell()
+
+        const msgSign = sign(msg.hash(), keys.secretKey);
+
+        return await provider.external(
+            beginCell()
+                .storeBuffer(msgSign)
+                .storeSlice(msg.asSlice())
+            .endCell()
+        )
+    }
+
     async getCurrentState(provider: ContractProvider) : Promise<[Address, number, Address]> {
         const result = await provider.get('get_current_state', []);
 
+        let seqno: number = result.stack.readNumber();
         let admin_addr: Address = result.stack.readAddress();
         let commission_prescent: number = result.stack.readNumber();
         let commission_addr: Address = result.stack.readAddress();
         return [ admin_addr, commission_prescent, commission_addr ];
+    }
+
+    async getCurrentSeqno(provider: ContractProvider) : Promise<number> {
+        const result = await provider.get('get_current_seqno', []);
+
+        let seqno: number = result.stack.readNumber();
+        return seqno;
     }
 }

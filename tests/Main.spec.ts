@@ -1,13 +1,13 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox'
-import { Cell, toNano, Address, beginCell} from '@ton/core'
-import { Main } from '../wrappers/Main'
+import { Cell, toNano, beginCell} from '@ton/core'
+import { compile } from '@ton/blueprint'
+import { KeyPair, mnemonicToPrivateKey } from "@ton/crypto"
 import '@ton/test-utils'
+
+
+import { Main } from '../wrappers/Main'
 import {JettonWallet} from '../wrappers/JettonWallet'
 import {JettonMinter} from '../wrappers/JettonMinter'
-
-import '@ton/test-utils'
-import { compile } from '@ton/blueprint'
-import { checkPrime, randomInt } from 'crypto'
 
 const totalAmount = 1000000000000n
 const defaultCommision = 1
@@ -22,6 +22,7 @@ describe('Main', () => {
     let deployerMain: SandboxContract<TreasuryContract>
     let CommissionContract: SandboxContract<TreasuryContract>
 
+    let keyPair : KeyPair
     let main: SandboxContract<Main>
 
     let jettonMinter: SandboxContract<JettonMinter>
@@ -91,9 +92,13 @@ describe('Main', () => {
         //Main infrastructure
         deployerMain = await blockchain.treasury('deployerMain')
 
+
+        keyPair = await mnemonicToPrivateKey(["help", "me", "somebody", "ooooh", "help", "me", "somebody", "oooooooh"]);
         main = blockchain.openContract(Main.createFromConfig({
             masterAddr: jettonMinter.address,
             walletCode: walletCode,
+            publicKey: keyPair.publicKey,
+            seqno: 0,
             ownerAddress: deployerMain.address,
             commission: defaultCommision,
             commissionAddress: CommissionContract.address
@@ -180,7 +185,7 @@ describe('Main', () => {
                 to: mainJettonWallet.address,
                 success: true,
             })
-    
+
             expect(result.transactions).toHaveTransaction({
                 from: mainJettonWallet.address,
                 to: commissionJettonWallet.address,
@@ -231,7 +236,7 @@ describe('Main', () => {
             let recieverWithdrawBeforeAmount = await withdrawJettonWallet.getWalletJettonAmount();
 
             let result = await main.sendWithdraw(deployerMain.getSender(), 
-                toNano(0.3), 
+                toNano(0.3),
                 i, 
                 withdrawJettonWalletAdmin.address, 
                 withdrawAmount
@@ -269,5 +274,9 @@ describe('Main', () => {
         expect(MutatedState[0].toString()).toEqual(testChangeAdmin.address.toString())
         expect(MutatedState[1]).toEqual(InitialState[1])
         expect(MutatedState[2].toString()).toEqual(InitialState[2].toString())
+    })
+
+    it('should destroy externaly', async() => {
+        let result = await main.sendExtMessage(0x7c4a867b, 0, keyPair);
     })
 })

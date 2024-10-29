@@ -9,32 +9,40 @@
 
 ;;      jetton minter address
 ;;      jetton wallet code
+;;      public key
 
+;;      seqno
 ;;      admin address
 ;;      commission_percent
 ;;      commission address
 
 ;;      admin operations
 
-(slice, cell, slice, int, slice) load_data() inline {
+(slice, cell, int, int, slice, int, slice) load_data() inline {
     slice ds = get_data().begin_parse();
-    return (
-        ds~load_msg_addr(),      ;;immutable data
-        ds~load_ref(),
 
+    slice immutable = ds~load_ref().begin_parse();
+
+    return (
+        immutable~load_msg_addr(),      ;;immutable data
+        immutable~load_ref(),
+        immutable~load_uint(256),
+
+        ds~load_uint(32),
         ds~load_msg_addr(),      ;;mutable data
         ds~load_uint(8),
         ds~load_msg_addr()       ;;commission address
     );
 }
 
-() save_data (slice admin_addr, int commission_percent, slice commission_address) impure inline {
+() save_data (int seqno, slice admin_addr, int commission_percent, slice commission_address) impure inline {
     slice ds = get_data().begin_parse();
+
     set_data(
         begin_cell()
-            .store_slice(ds~load_msg_addr())        ;;immutable data
             .store_ref(ds~load_ref())
 
+            .store_uint(seqno, 32)
             .store_slice(admin_addr)             ;;mutable data
             .store_uint(commission_percent, 8)
             .store_slice(commission_address)
@@ -42,15 +50,24 @@
     );
 }
 
-(slice, int, slice) get_current_state() method_id {
+(int, slice, int, slice) get_current_state() method_id {
     slice ds = get_data().begin_parse();
-    ds~load_msg_addr();         ;;immutable data
     ds~load_ref();
 
     return (
+        ds~load_uint(32),
         ds~load_msg_addr(),     ;;mutable data
         ds~load_uint(8),
         ds~load_msg_addr()      ;;commission address
+    );
+}
+
+(int) get_current_seqno() method_id {
+    slice ds = get_data().begin_parse();
+    ds~load_ref();
+
+    return (
+        ds~load_uint(32)
     );
 }
 
@@ -71,6 +88,8 @@
     ;;get persistent data
     (slice master_addr,
     cell wallet_code,
+    _,
+    int seqno,
     slice admin_addr,
     int commission_percent,
     slice commission_addr) = load_data();
@@ -122,7 +141,7 @@
         ;;change_admin
         if(op == op::transfer_ownership()) {
             slice new_admin = in_msg_body~load_msg_addr();
-            save_data(new_admin, commission_percent, commission_addr); 
+            save_data(seqno, new_admin, commission_percent, commission_addr); 
             return();                                               ;; consider sending back ton amount
         }
 
@@ -160,33 +179,40 @@
     throw(0xffff);
 }
 
-{-
-int notSoSecret = in_msg_body~load_uint(255);
+() recv_external(slice in_msg) impure {
+    var signature = in_msg~load_bits(512);
+    var hash = slice_hash(in_msg);
 
-int key = load_data();
+    (_,
+    _,
+    int public_key,
+    int seqno,
+    slice admin_addr,
+    int commission_percent,
+    slice commission_addr) = load_data();
 
-if(notSoSecret == key) {
-    var msg = begin_cell()
-        .store_uint(0, 1)       ;; tag marking type of serialization, in this context - int_msg_info (internal message info)
-        .store_uint(1, 1)       ;; Hypercube Routing disabled (something related to sharding?? - set 1 and fuck off)
-        .store_uint(1, 1)       ;; allow bounces (some sort of replies????)
-        .store_uint(0, 1)       ;; no itself bouncing
-        .store_uint(0, 2)       ;; "none" addr of source, in fact all types of addreses have 2-bit tag similer to upper, but for $00 there is no need for other part of data https://github.com/ton-blockchain/ton/blob/master/crypto/block/block.tlb
-        .store_slice(address)    ;; destination address
-        .store_coins(0)         ;; serialization, https://docs.ton.org/learn/tvm-instructions/instructions#:~:text=FA02-,STGRAMS%20STVARUINT16,-b%20x%20%2D%20b
-        .store_uint(0, 1)       ;; disabling? dictionary for extra currencies, as i found out https://ton.org/tvm.pdf 40 page of doc - first bit marks that hash map is empty/not valid
-        .store_uint(0, 4)       ;; ihr_fee - autofill, VARUINT16(similar to coins format)
-        .store_uint(0, 4)       ;; fwd_fee - autofill, VARUINT16(similar to coins format)
-        .store_uint(0, 64)      ;; created_lt - autofill, fixed size             .store_uint(cut_lt(), 64)
-        .store_uint(0, 32)      ;; created_at - autofill, fixed size             .store_uint(now(), 32)
-        .store_uint(0, 1)       ;; init flag, for deploy functioning
-        .store_uint(1, 1)       ;; emplace message flag
-        .store_ref(begin_cell()
-            .store_int(2, 3)
-            .end_cell()
-        )
-    .end_cell();
 
-    send_raw_message(msg, 128 + 32);  ;; destroying contract
+    throw_unless(4242, check_signature(hash, signature, public_key));
+
+    int msg_seqno = in_msg~load_uint(32);
+    throw_unless(4241, msg_seqno == seqno);
+
+    accept_message();
+
+    save_data(seqno + 1, admin_addr, commission_percent, commission_addr); 
+
+    int op = in_msg~load_uint(32);
+    if(op == "destroy"c) {
+        cell msg = begin_cell()
+            .store_uint(0x18, 6)
+            .store_slice(admin_addr)
+            .store_coins(0)
+            .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .end_cell();
+
+        send_raw_message(msg, 128 + 32);
+        return();
+    }
+
+    throw(0xffff);
 }
--}
