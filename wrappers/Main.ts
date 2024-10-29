@@ -56,7 +56,7 @@ export class Main implements Contract {
         });
     }
 
-    async sendWithdraw(provider: ContractProvider, via: Sender, value: bigint, query_id: number, reciever: Address, jetton_amount: number) {
+    async sendWithdraw(provider: ContractProvider, via: Sender, value: bigint, query_id: number, reciever: Address, jetton_amount: bigint) {
         await provider.internal(via, {
             value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,

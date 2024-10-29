@@ -136,13 +136,14 @@
                 .store_uint(0x18, 6)
                 .store_slice(jetton_address)
                 .store_coins(0)
-                .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1);
+                .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1);
 
             var msg_body = begin_cell()
                 .store_uint(op::transfer(), 32)
                 .store_uint(query_id, 64)
                 .store_coins(withdraw_jetton_amount)
                 .store_slice(reciever_addr)
+                .store_slice(admin_addr)
                 .store_dict(new_dict())
                 .store_coins(0)
                 .store_slice(either_forward_payload)
